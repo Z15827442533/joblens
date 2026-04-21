@@ -21,9 +21,7 @@
       <a onclick="showPage('company')">公司背调</a>
       <a onclick="showPage('resume')">简历优化</a>
       <a onclick="showPage('interview')">面试梳理</a>
-      <a onclick="showPage('settings')" style="margin-left:auto;">
-        <svg style="width:14px;height:14px;"><use href="#i-edit"/></svg> 设置
-      </a>
+      <!-- 设置页入口（免费测试期隐藏，商业化后开启） -->
     </div>
   </div>
 </nav>
@@ -102,7 +100,7 @@
   <div class="container" style="margin-top:20px;background:var(--acc);border:1px solid #AED6F1;">
     <div style="display:flex;align-items:center;gap:8px;font-size:14px;color:var(--pri);">
       <svg style="width:18px;height:18px;flex-shrink:0;color:var(--sec);"><use href="#i-lightbulb"/></svg>
-      <span><strong>首次使用请先在「设置」中配置API Key</strong>，支持 OpenAI、DeepSeek、智谱GLM、通义千问等兼容接口。</span>
+      <span>🎉 <strong>免费开放测试中</strong>，打开即可直接使用，无需任何配置。</span>
     </div>
   </div>
 </div>
@@ -455,9 +453,9 @@
 </div>
 
 <!-- ===== External Scripts ===== -->
-<script src="js/api.js"></script>
-<script src="js/settings.js"></script>
-<script src="js/modules.js"></script>
+<script src="js/api.min.js"></script>
+  <script src="js/settings.min.js"></script>
+  <script src="js/modules.min.js"></script>
 
 <!-- ===== Main App Logic ===== -->
 <script>
@@ -548,12 +546,7 @@ async function startCompanyResearch() {
 
   var jd = document.getElementById('company-jd').value.trim();
 
-  // Check API configuration
-  if (!JobLensAPI.ApiConfig.isConfigured()) {
-    showToast('请先在「设置」中配置API Key', 'error');
-    showPage('settings');
-    return;
-  }
+
 
   // Show loading
   document.getElementById('company-input-section').style.display = 'none';
@@ -703,12 +696,7 @@ async function startResumeAnalysis() {
   errEl.classList.remove('show');
   document.getElementById('resume-jd').classList.remove('error');
 
-  // Check API configuration
-  if (!JobLensAPI.ApiConfig.isConfigured()) {
-    showToast('请先在「设置」中配置API Key', 'error');
-    showPage('settings');
-    return;
-  }
+
 
   // Show loading
   document.getElementById('resume-input-section').style.display = 'none';
@@ -820,12 +808,7 @@ async function startInterviewQuestions() {
 
   var company = document.getElementById('questions-company').value.trim();
 
-  // Check API configuration
-  if (!JobLensAPI.ApiConfig.isConfigured()) {
-    showToast('请先在「设置」中配置API Key', 'error');
-    showPage('settings');
-    return;
-  }
+
 
   document.getElementById('questions-input-section').style.display = 'none';
   document.getElementById('questions-result').style.display = 'none';
@@ -883,12 +866,7 @@ async function startInterviewSpeech() {
   errEl.classList.remove('show');
   document.getElementById('speech-jd').classList.remove('error');
 
-  // Check API configuration
-  if (!JobLensAPI.ApiConfig.isConfigured()) {
-    showToast('请先在「设置」中配置API Key', 'error');
-    showPage('settings');
-    return;
-  }
+
 
   document.getElementById('speech-input-section').style.display = 'none';
   document.getElementById('speech-result').style.display = 'none';
@@ -946,12 +924,7 @@ async function startInterviewQA() {
 
   var company = document.getElementById('qa-company').value.trim();
 
-  // Check API configuration
-  if (!JobLensAPI.ApiConfig.isConfigured()) {
-    showToast('请先在「设置」中配置API Key', 'error');
-    showPage('settings');
-    return;
-  }
+
 
   document.getElementById('qa-input-section').style.display = 'none';
   document.getElementById('qa-result').style.display = 'none';
@@ -1005,10 +978,6 @@ document.addEventListener('DOMContentLoaded', function() {
     zone.addEventListener('drop', handleDrop);
   }
 
-  // Check API configuration on load
-  if (!JobLensAPI.ApiConfig.isConfigured()) {
-    showToast('请先在「设置」中配置API Key', 'info');
-  }
 });
 </script>
 
