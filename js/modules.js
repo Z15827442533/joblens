@@ -237,17 +237,141 @@
   }
 
   // ============================================================
+  //  网络搜索工具（免费API，无需Key）
+  // ============================================================
+
+  /**
+   * 通过 Wikipedia API 搜索公司信息
+   * @param {string} companyName - 公司名称
+   * @returns {Promise<object>} - { summary, extract, url }
+   */
+  function searchWikipedia(companyName) {
+    return new Promise(function (resolve) {
+      var url = 'https://zh.wikipedia.org/api/rest_v1/page/summary/' + encodeURIComponent(companyName);
+      fetch(url)
+        .then(function (resp) { return resp.json(); })
+        .then(function (data) {
+          if (data.extract) {
+            resolve({
+              source: '维基百科',
+              summary: data.extract || '',
+              url: data.content_urls && data.content_urls.desktop ? data.content_urls.desktop.page : ''
+            });
+          } else {
+            resolve(null);
+          }
+        })
+        .catch(function () {
+          // 中文维基没找到，尝试英文
+          fetch('https://en.wikipedia.org/api/rest_v1/page/summary/' + encodeURIComponent(companyName))
+            .then(function (resp) { return resp.json(); })
+            .then(function (data) {
+              if (data.extract) {
+                resolve({
+                  source: 'Wikipedia',
+                  summary: data.extract || '',
+                  url: data.content_urls && data.content_urls.desktop ? data.content_urls.desktop.page : ''
+                });
+              } else {
+                resolve(null);
+              }
+            })
+            .catch(function () { resolve(null); });
+        });
+    });
+  }
+
+  /**
+   * 通过 DuckDuckGo Instant Answer API 搜索公司信息
+   * @param {string} companyName - 公司名称
+   * @returns {Promise<object>} - { summary, url, type }
+   */
+  function searchDuckDuckGo(companyName) {
+    return new Promise(function (resolve) {
+      var query = companyName + ' 公司 简介';
+      var url = 'https://api.duckduckgo.com/?q=' + encodeURIComponent(query) + '&format=json&no_html=1&skip_disambig=1';
+      fetch(url)
+        .then(function (resp) { return resp.json(); })
+        .then(function (data) {
+          var info = {};
+          if (data.Abstract) {
+            info.summary = data.Abstract;
+            info.url = data.AbstractURL;
+            info.source = data.AbstractSource || 'DuckDuckGo';
+          }
+          if (data.RelatedTopics && data.RelatedTopics.length > 0) {
+            var topics = data.RelatedTopics
+              .filter(function (t) { return t.Text; })
+              .slice(0, 3)
+              .map(function (t) { return t.Text; });
+            info.relatedTopics = topics;
+          }
+          if (info.summary) {
+            resolve(info);
+          } else {
+            resolve(null);
+          }
+        })
+        .catch(function () { resolve(null); });
+    });
+  }
+
+  /**
+   * 综合搜索公司信息（并行调用多个数据源）
+   * @param {string} companyName - 公司名称
+   * @returns {Promise<object>} - 整合后的搜索结果
+   */
+  async function searchCompanyInfo(companyName) {
+    var results = await Promise.all([
+      searchWikipedia(companyName),
+      searchDuckDuckGo(companyName)
+    ]);
+
+    var wiki = results[0];
+    var ddg = results[1];
+
+    var info = {
+      companyName: companyName,
+      sources: [],
+      summary: '',
+      details: []
+    };
+
+    if (wiki) {
+      info.sources.push({ name: wiki.source, url: wiki.url });
+      info.summary += wiki.summary;
+      info.details.push({ source: wiki.source, content: wiki.summary });
+    }
+
+    if (ddg) {
+      if (ddg.summary && info.summary.indexOf(ddg.summary) === -1) {
+        info.sources.push({ name: ddg.source, url: ddg.url });
+        info.details.push({ source: ddg.source, content: ddg.summary });
+        if (info.summary) info.summary += '\n\n';
+        info.summary += ddg.summary;
+      }
+      if (ddg.relatedTopics) {
+        info.relatedTopics = ddg.relatedTopics;
+      }
+    }
+
+    info.hasData = info.details.length > 0;
+    return info;
+  }
+
+  // ============================================================
   //  模块一：公司背调
   // ============================================================
 
   /**
-   * 生成公司背调报告
+   * 生成公司背调报告（先搜索网络信息，再用AI专业分析）
    * @param {string} companyName - 公司名称
    * @param {string} jd - 职位描述文本
    * @param {HTMLElement} [outputElement] - 可选，用于实时显示流式输出的 DOM 元素
+   * @param {Function} [onSearchProgress] - 搜索进度回调
    * @returns {Promise<string>} - 完整的公司背调报告文本
    */
-  async function generateCompanyReport(companyName, jd, outputElement) {
+  async function generateCompanyReport(companyName, jd, outputElement, onSearchProgress) {
     // 参数校验
     if (!companyName || !companyName.trim()) {
       throw new Error('请输入公司名称');
@@ -261,9 +385,40 @@
       throw new Error('AI 服务未就绪，请检查 API 配置');
     }
 
+    // ===== 第一步：网络搜索公司信息 =====
+    if (onSearchProgress) onSearchProgress('searching');
+    var searchResult = await searchCompanyInfo(companyName.trim());
+    if (onSearchProgress) onSearchProgress('search_done');
+
+    // ===== 第二步：构建AI分析Prompt（注入搜索结果） =====
+    var searchContext = '';
+    if (searchResult.hasData) {
+      searchContext = [
+        '',
+        '---',
+        '',
+        '以下是通过网络搜索获取的「' + companyName.trim() + '」相关信息，请在分析中参考和引用：',
+        ''
+      ];
+      searchResult.details.forEach(function (d, i) {
+        searchContext.push('**信息来源' + (i + 1) + '：' + d.source + '**');
+        searchContext.push(d.content);
+        searchContext.push('');
+      });
+      if (searchResult.relatedTopics) {
+        searchContext.push('**相关话题：**');
+        searchResult.relatedTopics.forEach(function (t) {
+          searchContext.push('- ' + t);
+        });
+        searchContext.push('');
+      }
+      searchContext.push('---');
+      searchContext = searchContext.join('\n');
+    }
+
     var systemPrompt = [
       '你是一位资深的职场调研分析师，擅长对目标公司进行全面深入的背景调查。',
-      '请根据用户提供的公司名称和职位描述（JD），生成一份结构化的公司背调报告。',
+      '请根据用户提供的公司名称、职位描述（JD），以及网络搜索到的真实信息，生成一份结构化的公司背调报告。',
       '',
       '报告必须包含以下四大板块，每个板块都需要有具体、有价值的内容：',
       '',
@@ -292,10 +447,11 @@
       '',
       '输出要求：',
       '1. 全部使用中文输出',
-      '2. 信息要具体、有参考价值，避免空泛描述',
+      '2. **优先使用网络搜索到的真实信息**，在引用时标注信息来源',
       '3. 如果某些信息无法确认，请明确标注"待核实"',
       '4. 适当使用数据支撑观点',
-      '5. 使用 Markdown 格式，层次分明'
+      '5. 使用 Markdown 格式，层次分明',
+      '6. 在报告开头用一行标注数据来源，格式：> 数据来源：维基百科、DuckDuckGo 等'
     ].join('\n');
 
     var userPrompt = [
@@ -304,7 +460,8 @@
       '**公司名称：** ' + companyName.trim(),
       '',
       '**目标职位描述（JD）：**',
-      jd.trim()
+      jd.trim(),
+      searchContext
     ].join('\n');
 
     var messages = [
@@ -312,7 +469,17 @@
       { role: 'user', content: userPrompt }
     ];
 
+    // ===== 第三步：AI流式生成分析报告 =====
+    if (onSearchProgress) onSearchProgress('analyzing');
+
     var fullText = '';
+
+    // 如果有搜索结果，先显示搜索来源信息
+    if (searchResult.hasData && outputElement) {
+      var sourceHeader = '**数据来源：** ' + searchResult.sources.map(function (s) { return s.name; }).join('、') + '\n\n';
+      fullText = sourceHeader;
+      showStreamingOutput(outputElement, fullText);
+    }
 
     try {
       await window.JobLensAPI.streamAI(messages, function (token) {

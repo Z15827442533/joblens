@@ -239,7 +239,12 @@
 
     // 构建请求 URL
     var endpoint = config.apiEndpoint.replace(/\/+$/, '');
-    var url = endpoint + '/chat/completions';
+    // 火山引擎等API的endpoint已包含完整路径，不再拼接 /chat/completions
+    var url = endpoint;
+    // 如果endpoint看起来不包含chat/completions路径，则自动拼接（兼容标准OpenAI格式）
+    if (url.indexOf('/chat/completions') === -1 && url.indexOf('/v3') === -1 && url.indexOf('/coding') === -1) {
+      url = endpoint + '/chat/completions';
+    }
 
     // 构建请求体
     var body = {
@@ -373,7 +378,12 @@
 
     // 构建请求 URL
     var endpoint = config.apiEndpoint.replace(/\/+$/, '');
-    var url = endpoint + '/chat/completions';
+    // 火山引擎等API的endpoint已包含完整路径，不再拼接 /chat/completions
+    var url = endpoint;
+    // 如果endpoint看起来不包含chat/completions路径，则自动拼接（兼容标准OpenAI格式）
+    if (url.indexOf('/chat/completions') === -1 && url.indexOf('/v3') === -1 && url.indexOf('/coding') === -1) {
+      url = endpoint + '/chat/completions';
+    }
 
     // 构建请求体（开启 stream）
     var body = {

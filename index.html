@@ -134,19 +134,15 @@
     <div class="loading-steps">
       <div class="loading-step active" id="company-load-step-1">
         <div class="step-icon"><div class="step-spinner"></div></div>
-        <span>正在收集公司基本信息...</span>
+        <span>正在搜索网络信息（维基百科、DuckDuckGo）...</span>
       </div>
       <div class="loading-step" id="company-load-step-2">
         <div class="step-icon">2</div>
-        <span>分析薪资水平和行业数据...</span>
+        <span>整合搜索结果，构建分析上下文...</span>
       </div>
       <div class="loading-step" id="company-load-step-3">
         <div class="step-icon">3</div>
-        <span>整理职场口碑和风险评估...</span>
-      </div>
-      <div class="loading-step" id="company-load-step-4">
-        <div class="step-icon">4</div>
-        <span>生成结构化背调报告...</span>
+        <span>AI专业分析中（基本面+薪资+口碑+风险）...</span>
       </div>
     </div>
     <div style="margin-top:16px;">
@@ -563,7 +559,16 @@ async function startCompanyResearch() {
   document.getElementById('company-input-section').style.display = 'none';
   document.getElementById('company-result').style.display = 'none';
   document.getElementById('company-loading').style.display = 'block';
-  animateCompanyLoading();
+
+  // Reset loading steps
+  var steps = [
+    document.getElementById('company-load-step-1'),
+    document.getElementById('company-load-step-2'),
+    document.getElementById('company-load-step-3')
+  ];
+  steps.forEach(function(s) { s.className = 'loading-step'; });
+  steps[0].classList.add('active');
+  steps[0].querySelector('.step-icon').innerHTML = '<div class="step-spinner"></div>';
 
   var outputEl = document.getElementById('company-stream-output');
   outputEl.innerHTML = '';
@@ -571,15 +576,38 @@ async function startCompanyResearch() {
   // Create abort controller
   currentController = new AbortController();
 
+  // Search progress callback
+  function onSearchProgress(stage) {
+    if (stage === 'searching') {
+      // Step 1 still active (searching)
+    } else if (stage === 'search_done') {
+      // Step 1 done, step 2 active
+      steps[0].classList.remove('active');
+      steps[0].classList.add('done');
+      steps[0].querySelector('.step-icon').innerHTML = '<svg style="width:12px;height:12px;"><use href="#i-check"/></svg>';
+      steps[1].classList.add('active');
+      steps[1].querySelector('.step-icon').innerHTML = '<div class="step-spinner"></div>';
+    } else if (stage === 'analyzing') {
+      // Step 2 done, step 3 active
+      steps[1].classList.remove('active');
+      steps[1].classList.add('done');
+      steps[1].querySelector('.step-icon').innerHTML = '<svg style="width:12px;height:12px;"><use href="#i-check"/></svg>';
+      steps[2].classList.add('active');
+      steps[2].querySelector('.step-icon').innerHTML = '<div class="step-spinner"></div>';
+    }
+  }
+
   try {
-    await JobLensModules.generateCompanyReport(name, jd, outputEl);
+    await JobLensModules.generateCompanyReport(name, jd, outputEl, onSearchProgress);
+    steps[2].classList.remove('active');
+    steps[2].classList.add('done');
+    steps[2].querySelector('.step-icon').innerHTML = '<svg style="width:12px;height:12px;"><use href="#i-check"/></svg>';
     document.getElementById('company-loading').style.display = 'none';
     document.getElementById('company-result').style.display = 'block';
     showToast('背调报告生成完成', 'success');
   } catch (err) {
     document.getElementById('company-loading').style.display = 'none';
     if (err.name === 'AbortError') {
-      // User stopped generation, show partial result if any
       if (outputEl.innerHTML.trim()) {
         document.getElementById('company-result').style.display = 'block';
       } else {
